@@ -132,4 +132,8 @@ export class App {
       });
     }
   }
+
+  clearActivities() {
+    this.web3.clearActivities();
+  }
 }

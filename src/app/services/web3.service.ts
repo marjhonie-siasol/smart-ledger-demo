@@ -2,6 +2,13 @@ import { Injectable, signal, computed, NgZone } from '@angular/core';
 import { ethers } from 'ethers';
 import { DEMO_TOKEN_ABI, DEMO_TOKEN_ADDRESS } from '../contracts/demo-token';
 
+export interface Activity {
+  id: string;
+  type: 'info' | 'success' | 'error' | 'warning';
+  message: string;
+  timestamp: Date;
+}
+
 declare global {
   interface Window {
     ethereum?: any;
@@ -20,6 +27,7 @@ export class Web3Service {
   public currentAccount = signal<string>('');
   public ethBalance = signal<string>('0');
   public tokenBalance = signal<string>('0');
+  public activities = signal<Activity[]>([]);
   public isConnected = computed(() => !!this.currentAccount());
 
   constructor(private ngZone: NgZone) {
@@ -33,12 +41,14 @@ export class Web3Service {
       console.log('[Web3Service] accountsChanged:', accounts);
       this.ngZone.run(async () => {
         if (accounts.length === 0) {
+          this.addActivity('Wallet Disconnected', 'warning');
           this.currentAccount.set('');
           this.ethBalance.set('0');
           this.tokenBalance.set('0');
         } else {
           try {
-            await this.connectWallet(); // Re-sync everything
+            this.addActivity('Account Changed - Resyncing...', 'info');
+            await this.connectWallet();
           } catch (err) {
             console.error('[Web3Service] Error syncing on account change:', err);
           }
@@ -48,14 +58,31 @@ export class Web3Service {
 
     window.ethereum.on('chainChanged', () => {
       console.log('[Web3Service] chainChanged - reloading page');
+      this.addActivity('Network Changed - Reloading...', 'warning');
       window.location.reload();
     });
+  }
+
+  public addActivity(message: string, type: Activity['type'] = 'info') {
+    const newActivity: Activity = {
+      id: Math.random().toString(36).substring(2, 9),
+      type,
+      message,
+      timestamp: new Date(),
+    };
+    // Add to the beginning of the array so newest is first
+    this.activities.set([newActivity, ...this.activities()]);
+  }
+
+  public clearActivities() {
+    this.activities.set([]);
   }
 
   async connectWallet(): Promise<string> {
     console.log('[Web3Service] connectWallet start');
 
     if (!window.ethereum) {
+      this.addActivity('MetaMask not found!', 'error');
       throw new Error('MetaMask not found');
     }
 
@@ -75,21 +102,16 @@ export class Web3Service {
     );
 
     await this.refreshBalances();
-    console.log('[Web3Service] Wallet connected and synced:', address);
-
+    this.addActivity(`Wallet Connected: ${address.substring(0, 6)}...${address.substring(address.length - 4)}`, 'success');
+    
     return address;
   }
 
   async refreshBalances(): Promise<void> {
-    if (!this.provider || !this.currentAccount()) {
-      console.warn('[Web3Service] Cannot refresh balances: No provider or account');
-      return;
-    }
+    if (!this.provider || !this.currentAccount()) return;
 
     try {
       const address = this.currentAccount();
-      
-      // Perform balance checks
       const [ethBal, rawTokenBal, decimals] = await Promise.all([
         this.provider.getBalance(address),
         this.contract['balanceOf'](address),
@@ -98,7 +120,6 @@ export class Web3Service {
 
       this.ethBalance.set(ethers.formatEther(ethBal));
       this.tokenBalance.set(ethers.formatUnits(rawTokenBal, decimals));
-      console.log(`[Web3Service] Balances updated - ETH: ${this.ethBalance()}, DMT: ${this.tokenBalance()}`);
     } catch (err) {
       console.error('[Web3Service] Failed to refresh balances:', err);
     }
@@ -109,14 +130,22 @@ export class Web3Service {
       throw new Error('Contract or wallet not connected');
     }
 
-    const decimals = await this.contract['decimals']();
-    const parsedAmount = ethers.parseUnits(amount.toString(), decimals);
+    try {
+      this.addActivity(`Minting ${amount} DMT...`, 'info');
+      const decimals = await this.contract['decimals']();
+      const parsedAmount = ethers.parseUnits(amount.toString(), decimals);
 
-    const tx = await this.contract['mint'](this.currentAccount(), parsedAmount);
-    await tx.wait();
-    
-    // Auto-refresh balances after transaction
-    await this.refreshBalances();
+      const tx = await this.contract['mint'](this.currentAccount(), parsedAmount);
+      this.addActivity(`Transaction Sent - Pending Confirmation...`, 'info');
+      
+      await tx.wait();
+      
+      await this.refreshBalances();
+      this.addActivity(`Successfully Minted ${amount} DMT`, 'success');
+    } catch (err: any) {
+      this.addActivity(`Minting Failed: ${err.message || 'Unknown Error'}`, 'error');
+      throw err;
+    }
   }
 
   async transferTokens(to: string, amount: string | number): Promise<void> {
@@ -124,15 +153,21 @@ export class Web3Service {
       throw new Error('Contract or wallet not connected');
     }
 
-    const decimals = await this.contract['decimals']();
-    const parsedAmount = ethers.parseUnits(amount.toString(), decimals);
+    try {
+      this.addActivity(`Transferring ${amount} DMT to ${to.substring(0, 6)}...`, 'info');
+      const decimals = await this.contract['decimals']();
+      const parsedAmount = ethers.parseUnits(amount.toString(), decimals);
 
-    console.log(`[Web3Service] Transferring ${amount} DMT to ${to}`);
-    const tx = await this.contract['transfer'](to, parsedAmount);
-    await tx.wait();
-    
-    // Auto-refresh balances after transaction
-    await this.refreshBalances();
-    console.log(`[Web3Service] Transfer successful`);
+      const tx = await this.contract['transfer'](to, parsedAmount);
+      this.addActivity(`Transfer Pending...`, 'info');
+      
+      await tx.wait();
+      
+      await this.refreshBalances();
+      this.addActivity(`Transferred ${amount} DMT successfully`, 'success');
+    } catch (err: any) {
+      this.addActivity(`Transfer Failed: ${err.message || 'Unknown Error'}`, 'error');
+      throw err;
+    }
   }
 }
