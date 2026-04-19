@@ -1,24 +1,27 @@
 import { Component, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Web3Service } from './services/web3.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App {
-  address = '';
-  ethBalance = '0';
-  tokenBalance = '0';
+  // Transfer Form State
+  recipient = '';
+  transferAmount = '';
+
+  // UI Loading/Status state
   loading = false;
   status = '';
   error = '';
 
   constructor(
-    private web3: Web3Service,
+    public web3: Web3Service,
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone
   ) {}
@@ -30,31 +33,16 @@ export class App {
       this.loading = true;
       this.error = '';
       this.status = 'Connecting to wallet...';
-      this.cdr.detectChanges();
-
-      console.log('[App] before connectWallet service call');
-      const address = await this.web3.connectWallet();
-      console.log('[App] address received:', address);
-
-      console.log('[App] before getEthBalance');
-      const ethBalance = await this.web3.getEthBalance();
-      console.log('[App] eth balance:', ethBalance);
-
-      console.log('[App] before getTokenBalance');
-      const tokenBalance = await this.web3.getTokenBalance();
-      console.log('[App] token balance:', tokenBalance);
-
+      
+      await this.web3.connectWallet();
+      
       this.ngZone.run(() => {
-        this.address = address;
-        this.ethBalance = ethBalance;
-        this.tokenBalance = tokenBalance;
         this.status = '';
         this.loading = false;
         this.cdr.detectChanges();
       });
     } catch (err: any) {
       console.error('[App] connectWallet failed:', err);
-
       this.ngZone.run(() => {
         this.error = err?.message || 'Connection failed';
         this.status = '';
@@ -75,17 +63,13 @@ export class App {
 
       await this.web3.mintTokens('100');
 
-      const ethBalance = await this.web3.getEthBalance();
-      const tokenBalance = await this.web3.getTokenBalance();
-
       this.ngZone.run(() => {
-        this.ethBalance = ethBalance;
-        this.tokenBalance = tokenBalance;
         this.status = 'Mint successful';
         this.loading = false;
         this.cdr.detectChanges();
       });
 
+      // Clear status after delay
       setTimeout(() => {
         this.ngZone.run(() => {
           if (this.status === 'Mint successful') {
@@ -93,12 +77,55 @@ export class App {
             this.cdr.detectChanges();
           }
         });
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       console.error('[App] mint failed:', err);
-
       this.ngZone.run(() => {
         this.error = err?.message || 'Mint failed';
+        this.status = '';
+        this.loading = false;
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  async transfer() {
+    console.log('[App] transfer clicked');
+    
+    if (!this.recipient || !this.transferAmount) {
+      this.error = 'Please provide recipient and amount';
+      return;
+    }
+
+    try {
+      this.loading = true;
+      this.error = '';
+      this.status = `Transferring ${this.transferAmount} DMT...`;
+      this.cdr.detectChanges();
+
+      await this.web3.transferTokens(this.recipient, this.transferAmount);
+
+      this.ngZone.run(() => {
+        this.status = 'Transfer successful';
+        this.loading = false;
+        this.recipient = '';
+        this.transferAmount = '';
+        this.cdr.detectChanges();
+      });
+
+      // Clear status after delay
+      setTimeout(() => {
+        this.ngZone.run(() => {
+          if (this.status === 'Transfer successful') {
+            this.status = '';
+            this.cdr.detectChanges();
+          }
+        });
+      }, 3000);
+    } catch (err: any) {
+      console.error('[App] transfer failed:', err);
+      this.ngZone.run(() => {
+        this.error = err?.message || 'Transfer failed';
         this.status = '';
         this.loading = false;
         this.cdr.detectChanges();

@@ -1,4 +1,4 @@
-<div class="min-h-screen flex items-center justify-center bg-linear-to-br from-[#020617] via-[#020617] to-[#0f172a] text-white">
+<div class="min-h-screen flex items-center justify-center bg-linear-to-br from-[#020617] via-[#020617] to-[#0f172a] text-white py-10">
 
   <div class="w-full max-w-md p-6 rounded-2xl bg-[#0b1220]/80 backdrop-blur-xl shadow-xl border border-white/10">
 
@@ -11,7 +11,7 @@
       <p class="text-sm text-gray-400">v1.2 Demo</p>
     </div>
 
-    <!-- BUTTONS -->
+    <!-- MAIN BUTTONS -->
     <div class="flex gap-3 mb-5">
 
       <!-- CONNECT BUTTON -->
@@ -19,13 +19,13 @@
         (click)="connectWallet()"
         [disabled]="loading"
         class="flex-1 py-2 rounded-lg bg-linear-to-r from-purple-500 to-indigo-500 hover:opacity-90 transition disabled:opacity-50">
-        {{ loading ? 'Connecting...' : 'Connect Wallet' }}
+        {{ loading ? 'Processing...' : (web3.isConnected() ? 'Connected' : 'Connect Wallet') }}
       </button>
 
       <!-- MINT BUTTON -->
       <button
         (click)="mint()"
-        [disabled]="!address || loading"
+        [disabled]="!web3.isConnected() || loading"
         class="flex-1 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition disabled:opacity-40">
         Mint 100 DMT
       </button>
@@ -35,35 +35,72 @@
     <!-- ADDRESS -->
     <div class="bg-[#020617] border border-white/10 rounded-lg p-3 mb-4">
       <p class="text-xs text-gray-400 mb-1">YOUR ADDRESS</p>
-      <p class="text-sm break-all">
-        {{ address || '0x...' }}
+      <p class="text-sm break-all font-mono">
+        {{ web3.currentAccount() || '0x...' }}
       </p>
     </div>
 
     <!-- BALANCES -->
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-2 gap-3 mb-6">
 
       <!-- ETH -->
       <div class="bg-[#020617] border border-white/10 rounded-lg p-3">
         <p class="text-xs text-gray-400 mb-1">ETH BALANCE</p>
-        <p class="text-lg font-semibold">
-          {{ ethBalance || '0.0' }} <span class="text-sm text-gray-400">ETH</span>
+        <p class="text-lg font-semibold truncate">
+          {{ web3.ethBalance() }} <span class="text-xs text-gray-400">ETH</span>
         </p>
       </div>
 
       <!-- TOKEN -->
       <div class="bg-[#020617] border border-white/10 rounded-lg p-3">
         <p class="text-xs text-gray-400 mb-1">DMT BALANCE</p>
-        <p class="text-lg font-semibold text-green-400">
-          {{ tokenBalance || '0.0' }} <span class="text-sm text-gray-400">DMT</span>
+        <p class="text-lg font-semibold text-green-400 truncate">
+          {{ web3.tokenBalance() }} <span class="text-xs text-gray-400">DMT</span>
         </p>
       </div>
 
     </div>
 
-    <!-- LOADING TEXT -->
-    <div *ngIf="loading" class="text-center text-sm text-gray-400 mt-4">
-      Connecting to wallet...
+    <!-- TRANSFER SECTION -->
+    <div *ngIf="web3.isConnected()" class="border-t border-white/10 pt-6">
+      <h3 class="text-sm font-medium text-gray-300 mb-4 uppercase tracking-wider">Transfer Tokens</h3>
+      
+      <div class="space-y-4">
+        <!-- Recipient -->
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">RECIPIENT ADDRESS</label>
+          <input 
+            type="text" 
+            [(ngModel)]="recipient"
+            placeholder="0x..."
+            class="w-full bg-[#020617] border border-white/10 rounded-lg px-3 py-2 text-sm font-mono focus:outline-hidden focus:border-purple-500 transition"
+          />
+        </div>
+
+        <!-- Amount -->
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">AMOUNT (DMT)</label>
+          <input 
+            type="number" 
+            [(ngModel)]="transferAmount"
+            placeholder="0.0"
+            class="w-full bg-[#020617] border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:border-purple-500 transition"
+          />
+        </div>
+
+        <button
+          (click)="transfer()"
+          [disabled]="loading || !recipient || !transferAmount"
+          class="w-full py-2.5 rounded-lg bg-white text-black font-semibold hover:bg-gray-200 transition disabled:opacity-40">
+          Send DMT
+        </button>
+      </div>
+    </div>
+
+    <!-- STATUS/ERROR MESSAGES -->
+    <div class="mt-6 text-center text-sm font-medium h-6">
+      <p *ngIf="status" class="text-purple-400">{{ status }}</p>
+      <p *ngIf="error" class="text-red-400">{{ error }}</p>
     </div>
 
     <!-- FOOTER -->

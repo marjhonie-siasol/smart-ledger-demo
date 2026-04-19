@@ -47,3 +47,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Daily workflow
+dailyworkflow.terminal.commands.txt
